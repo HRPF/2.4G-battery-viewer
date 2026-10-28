@@ -136,8 +136,16 @@ def read_mchose() -> Reading:
     return r
 
 
+# 主程序卡片列表/顺序，改这里就能增删设备
+DEVICES = [
+    ("ATK 鼠标", read_atk),
+    ("DARKRIM 耳机", read_darkrim),
+    ("MCHOSE G87", read_mchose),
+]
+
+
 def read_all() -> list[Reading]:
-    return [read_atk(), read_darkrim()]
+    return [reader() for _, reader in DEVICES]
 
 
 # ==========================================================================
@@ -294,14 +302,17 @@ def build_ui():
     # ---- 卡片 ----
     body = ttk.Frame(root, padding=(18, 4, 18, 4))
     body.pack(fill="both", expand=True)
-    body.columnconfigure(0, weight=1, uniform="card")
-    body.columnconfigure(1, weight=1, uniform="card")
+    for i in range(len(DEVICES)):
+        body.columnconfigure(i, weight=1, uniform="card")
     body.rowconfigure(0, weight=1)
 
-    card_atk = DeviceCard(body, "ATK 鼠标")
-    card_atk.frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-    card_dr = DeviceCard(body, "DARKRIM 耳机")
-    card_dr.frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+    cards: list[DeviceCard] = []
+    last = len(DEVICES) - 1
+    for i, (title, _reader) in enumerate(DEVICES):
+        card = DeviceCard(body, title)
+        card.frame.grid(row=0, column=i, sticky="nsew",
+                        padx=(0 if i == 0 else 8, 0 if i == last else 8))
+        cards.append(card)
 
     foot = ttk.Label(root, text="正在读取…", style="Muted.TLabel", padding=(18, 4))
     foot.pack(fill="x", side="bottom")
@@ -439,11 +450,11 @@ def build_ui():
 
     # ---- 刷新逻辑 ----
     def apply(readings: list[Reading]):
-        card_atk.update(readings[0])
-        card_dr.update(readings[1])
+        for card, r in zip(cards, readings):
+            card.update(r)
         ok = sum(1 for r in readings if r.ok)
         foot.configure(text=f"更新于 {time.strftime('%H:%M:%S')}   "
-                            f"成功读取 {ok}/2 个设备"
+                            f"成功读取 {ok}/{len(DEVICES)} 个设备"
                             + ("" if state["auto"] else "   （自动刷新已关闭）"))
         state["busy"] = False
         btn.configure(state="normal")
@@ -453,8 +464,8 @@ def build_ui():
             readings = read_all()
         except Exception:
             traceback.print_exc()
-            readings = [Reading("ATK 鼠标", "", error="读取异常"),
-                        Reading("DARKRIM 耳机", "", error="读取异常")]
+            readings = [Reading(title, "", error="读取异常")
+                        for title, _ in DEVICES]
         results.put(("readings", readings))
 
     def refresh():
