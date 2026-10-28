@@ -22,6 +22,7 @@ from typing import Optional
 import hid_win as hw
 import battery as bt
 import darkrim_proto as drp
+import mchose_proto as mcp
 import tray_common as tc
 import win_link
 from hid_win import HidInterface
@@ -105,6 +106,33 @@ def read_darkrim() -> Reading:
     r.extra = " · ".join(bits)
     if r.level is None and not r.error:
         r.error = "耳机没有上报电量（请确认耳机已开机并连上）"
+    return r
+
+
+def read_mchose() -> Reading:
+    """MCHOSE G87 无线键盘（逆向官方网页驱动的私有协议）。"""
+    r = Reading("MCHOSE G87", "未连接")
+    try:
+        info = mcp.read_info(timeout=0.5)
+    except Exception as e:
+        r.error = f"读取出错：{e}"
+        return r
+    if info.error:
+        r.error = info.error
+        return r
+    conn = mcp.CONNECT_TEXT.get(info.connect_mode, "未知")
+    r.subtitle = f"41E4:2001 · {conn}"
+    r.level = info.battery
+    r.status = info.charge_text
+    r.detail = "私有 HID 协议（cmd 0x4A = 电量）"
+    bits = [f"连接 {conn}"]
+    if info.charge_state is not None:
+        bits.append(f"状态字节 0x{info.charge_state:02X}")
+    if info.detail:
+        bits.append(info.detail)
+    r.extra = " · ".join(bits)
+    if r.level is None and not r.error:
+        r.error = "键盘没有上报电量（键盘已休眠或关机）"
     return r
 
 
